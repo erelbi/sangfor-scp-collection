@@ -4,6 +4,17 @@ erelbi.sangfor_scp Release Notes
 
 .. contents:: Topics
 
+v1.0.1
+======
+
+Bugfixes
+--------
+
+- Removed all hardcoded default values (scp_host, scp_region, scp_access_key, scp_secret_key).
+  All connection parameters must now be explicitly provided via module parameters or environment variables.
+- EC2 authentication now fails immediately with a clear error if scp_region is not set,
+  instead of silently using the wrong region and causing authentication failures.
+
 v1.0.0
 ======
 
