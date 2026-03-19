@@ -1,0 +1,350 @@
+---
+# Sangfor SCP — Sanal Makine Operasyonları Playbook
+#
+# Kullanım:
+#   ansible-playbook scp_server_ops.yml -e "op=info"
+#   ansible-playbook scp_server_ops.yml -e "op=rename vm_name=eski-ad new_name=yeni-ad"
+#   ansible-playbook scp_server_ops.yml -e "op=start vm_name=web-01"
+#   ansible-playbook scp_server_ops.yml -e "op=stop vm_name=web-01"
+#   ansible-playbook scp_server_ops.yml -e "op=restart vm_name=web-01"
+#   ansible-playbook scp_server_ops.yml -e "op=update vm_name=web-01 cores=4 memory_mb=8192"
+#   ansible-playbook scp_server_ops.yml -e "op=create"
+#   ansible-playbook scp_server_ops.yml -e "op=delete vm_name=web-01"
+#
+# Değişkenler (group_vars veya -e ile override edilebilir):
+#   scp_host, scp_ak, scp_sk, scp_region
+
+- name: Sangfor SCP — Sanal Makine Operasyonları
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # ── Bağlantı ayarları ─────────────────────────────────────────────────
+    scp_host:   "{{ lookup('env', 'SCP_HOST') }}"
+    scp_ak:     "{{ lookup('env', 'SCP_ACCESS_KEY') }}"
+    scp_sk:     "{{ lookup('env', 'SCP_SECRET_KEY') }}"
+    scp_region: "{{ lookup('env', 'SCP_REGION') }}"
+
+    # ── Operasyon seçimi ──────────────────────────────────────────────────
+    # op: info | rename | start | stop | restart | suspend | update | create | delete | batch_stop | batch_start
+    op: info
+
+    # ── VM tanımlayıcılar ─────────────────────────────────────────────────
+    vm_name:  ""          # Ada göre işlem için
+    vm_id:    ""          # ID ile doğrudan işlem için
+    new_name: ""          # rename için yeni ad
+
+    # ── update için güncelleme alanları ──────────────────────────────────
+    cores:      ""
+    memory_mb:  ""
+    description: ""
+
+    # ── create için zorunlu alanlar ───────────────────────────────────────
+    create_name:           "yeni-vm"
+    create_az_id:          ""
+    create_image_id:       ""
+    create_storage_tag_id: ""
+    create_cores:          2
+    create_memory_mb:      2048
+    create_networks:
+      - vif_id: net0
+        connect: 1
+        model: virtio
+
+    # ── batch işlem için VM ID listesi ───────────────────────────────────
+    batch_vm_ids: []
+
+    # ── ortak görev ayarları ─────────────────────────────────────────────
+    wait:         true
+    wait_timeout: 300
+
+  tasks:
+
+    # ════════════════════════════════════════════════════════════════════
+    # INFO — tüm VM'leri listele
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM listesi"
+      erelbi.sangfor_scp.scp_server_info:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+      register: vm_list
+      when: op == "info"
+
+    - name: "VM listesi çıktısı"
+      debug:
+        msg: "{{ item.name }} | {{ item.id }} | {{ item.status }}"
+      loop: "{{ vm_list.servers | default([]) }}"
+      when: op == "info"
+
+    # ════════════════════════════════════════════════════════════════════
+    # RENAME — VM yeniden adlandır
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM yeniden adlandır: '{{ vm_name }}' → '{{ new_name }}'"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        present
+        name:         "{{ new_name }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: rename_result
+      when:
+        - op == "rename"
+        - vm_name != "" or vm_id != ""
+        - new_name != ""
+
+    - name: "Rename sonucu"
+      debug:
+        msg: "Yeni ad: {{ rename_result.server.name }} | ID: {{ rename_result.server.id }}"
+      when:
+        - op == "rename"
+        - rename_result is defined
+        - rename_result.changed
+
+    # ════════════════════════════════════════════════════════════════════
+    # UPDATE — CPU / RAM / description güncelle
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM güncelle: {{ vm_name | default(vm_id) }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        present
+        name:         "{{ vm_name | default(omit) }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        cores:        "{{ cores | int | default(omit) }}"
+        memory_mb:    "{{ memory_mb | int | default(omit) }}"
+        description:  "{{ description | default(omit) }}"
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: update_result
+      when:
+        - op == "update"
+        - vm_name != "" or vm_id != ""
+
+    - name: "Update sonucu"
+      debug:
+        msg: >
+          {{ update_result.server.name }}
+          | cores={{ update_result.server.cores }}
+          | memory={{ update_result.server.memory_mb }}MB
+          | changed={{ update_result.changed }}
+      when:
+        - op == "update"
+        - update_result is defined
+
+    # ════════════════════════════════════════════════════════════════════
+    # START — VM başlat
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM başlat: {{ vm_name | default(vm_id) }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        started
+        name:         "{{ vm_name | default(omit) }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: start_result
+      when:
+        - op == "start"
+        - vm_name != "" or vm_id != ""
+
+    - name: "Start sonucu"
+      debug:
+        msg: "{{ start_result.server.name }} | durum={{ start_result.server.status }} | changed={{ start_result.changed }}"
+      when:
+        - op == "start"
+        - start_result is defined
+
+    # ════════════════════════════════════════════════════════════════════
+    # STOP — VM durdur
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM durdur: {{ vm_name | default(vm_id) }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        stopped
+        name:         "{{ vm_name | default(omit) }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        force:        false
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: stop_result
+      when:
+        - op == "stop"
+        - vm_name != "" or vm_id != ""
+
+    - name: "Stop sonucu"
+      debug:
+        msg: "{{ stop_result.server.name }} | durum={{ stop_result.server.status }} | changed={{ stop_result.changed }}"
+      when:
+        - op == "stop"
+        - stop_result is defined
+
+    # ════════════════════════════════════════════════════════════════════
+    # RESTART — VM yeniden başlat
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM yeniden başlat: {{ vm_name | default(vm_id) }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        rebooted
+        name:         "{{ vm_name | default(omit) }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        force:        false
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: restart_result
+      when:
+        - op == "restart"
+        - vm_name != "" or vm_id != ""
+
+    - name: "Restart sonucu"
+      debug:
+        msg: "{{ restart_result.server.name }} | durum={{ restart_result.server.status }} | changed={{ restart_result.changed }}"
+      when:
+        - op == "restart"
+        - restart_result is defined
+
+    # ════════════════════════════════════════════════════════════════════
+    # SUSPEND — VM askıya al
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM askıya al: {{ vm_name | default(vm_id) }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        suspended
+        name:         "{{ vm_name | default(omit) }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: suspend_result
+      when:
+        - op == "suspend"
+        - vm_name != "" or vm_id != ""
+
+    - name: "Suspend sonucu"
+      debug:
+        msg: "{{ suspend_result.server.name }} | durum={{ suspend_result.server.status }} | changed={{ suspend_result.changed }}"
+      when:
+        - op == "suspend"
+        - suspend_result is defined
+
+    # ════════════════════════════════════════════════════════════════════
+    # CREATE — Yeni VM oluştur
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM oluştur: {{ create_name }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:          present
+        name:           "{{ create_name }}"
+        az_id:          "{{ create_az_id }}"
+        image_id:       "{{ create_image_id }}"
+        storage_tag_id: "{{ create_storage_tag_id }}"
+        cores:          "{{ create_cores }}"
+        memory_mb:      "{{ create_memory_mb }}"
+        networks:       "{{ create_networks }}"
+        power_on:       true
+        wait:           "{{ wait }}"
+        wait_timeout:   "{{ wait_timeout }}"
+      register: create_result
+      when:
+        - op == "create"
+        - create_az_id != ""
+        - create_image_id != ""
+        - create_storage_tag_id != ""
+
+    - name: "Create sonucu"
+      debug:
+        msg: "VM oluşturuldu: {{ create_result.server.id }} | {{ create_result.server.name }}"
+      when:
+        - op == "create"
+        - create_result is defined
+        - create_result.changed
+
+    # ════════════════════════════════════════════════════════════════════
+    # DELETE — VM sil
+    # ════════════════════════════════════════════════════════════════════
+    - name: "VM sil: {{ vm_name | default(vm_id) }}"
+      erelbi.sangfor_scp.scp_server:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        state:        absent
+        name:         "{{ vm_name | default(omit) }}"
+        server_id:    "{{ vm_id | default(omit) }}"
+        delete_disks: true
+        wait:         "{{ wait }}"
+        wait_timeout: "{{ wait_timeout }}"
+      register: delete_result
+      when:
+        - op == "delete"
+        - vm_name != "" or vm_id != ""
+
+    - name: "Delete sonucu"
+      debug:
+        msg: "VM silindi | changed={{ delete_result.changed }}"
+      when:
+        - op == "delete"
+        - delete_result is defined
+
+    # ════════════════════════════════════════════════════════════════════
+    # BATCH STOP — Birden fazla VM'i durdur
+    # ════════════════════════════════════════════════════════════════════
+    - name: "Toplu durdur: {{ batch_vm_ids | length }} VM"
+      erelbi.sangfor_scp.scp_server_action:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        server_ids: "{{ batch_vm_ids }}"
+        action: stop
+      when:
+        - op == "batch_stop"
+        - batch_vm_ids | length > 0
+
+    # ════════════════════════════════════════════════════════════════════
+    # BATCH START — Birden fazla VM'i başlat
+    # ════════════════════════════════════════════════════════════════════
+    - name: "Toplu başlat: {{ batch_vm_ids | length }} VM"
+      erelbi.sangfor_scp.scp_server_action:
+        scp_host:       "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region:     "{{ scp_region }}"
+        scp_verify_ssl: false
+        server_ids: "{{ batch_vm_ids }}"
+        action: start
+      when:
+        - op == "batch_start"
+        - batch_vm_ids | length > 0

@@ -1,0 +1,23 @@
+namespace: erelbi
+name: sangfor_scp
+version: 1.0.0
+readme: README.md
+authors:
+  - erelbi
+description: >
+  Ansible collection for managing Sangfor Cloud Platform (SCP) resources.
+  Wraps the sangfor-scp Python library to provide idempotent modules for
+  virtual machines, volumes, networks, EIPs, and platform information.
+license:
+  - MIT
+tags:
+  - cloud
+  - sangfor
+  - scp
+  - virtualization
+  - hci
+repository: https://github.com/erelbi/sangfor-scp-collection
+documentation: https://github.com/erelbi/sangfor-scp-collection/blob/main/README.md
+homepage: https://github.com/erelbi/sangfor-scp-collection
+issues: https://github.com/erelbi/sangfor-scp-collection/issues
+dependencies: {}

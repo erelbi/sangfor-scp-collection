@@ -1,0 +1,25 @@
+=========================================
+erelbi.sangfor_scp Release Notes
+=========================================
+
+.. contents:: Topics
+
+v1.0.0
+======
+
+New Modules
+-----------
+
+- ``scp_server`` - Manage Sangfor SCP virtual machines (CRUD + power ops)
+- ``scp_server_info`` - Query virtual machines
+- ``scp_server_action`` - Batch power operations on multiple VMs
+- ``scp_volume`` - Manage volumes/disks (CRUD + attach/detach/resize)
+- ``scp_volume_info`` - Query volumes
+- ``scp_vpc`` - Manage VPC networks
+- ``scp_subnet`` - Manage subnets
+- ``scp_eip`` - Manage Elastic IPs (allocate/bind/unbind/release)
+- ``scp_eip_info`` - Query Elastic IPs
+- ``scp_image_info`` - Query images (ISO and aCloud)
+- ``scp_resource_pool_info`` - Query resource pools (AZ), storage tags, overview
+- ``scp_tenant_info`` - Query tenants
+- ``scp_system_info`` - Query system version, platform, hosts
