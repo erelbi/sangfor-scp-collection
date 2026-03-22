@@ -4,6 +4,22 @@ erelbi.sangfor_scp Release Notes
 
 .. contents:: Topics
 
+v1.0.2
+======
+
+Bugfixes
+--------
+
+- Fixed ``from __future__`` import placement in all modules — must appear before
+  ``DOCUMENTATION``/``EXAMPLES``/``RETURN`` blocks to avoid ``SyntaxError`` on
+  Python 3.12+ and strict interpreters.
+
+New Playbooks
+-------------
+
+- ``playbooks/rename_server_by_ip.yml`` — rename a VM by its IP address using
+  existing ``scp_server_info`` + ``scp_server`` modules.
+
 v1.0.1
 ======
 

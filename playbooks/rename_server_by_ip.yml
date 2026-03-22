@@ -1,0 +1,83 @@
+---
+# Rename a Sangfor SCP VM identified by its IP address.
+#
+# Usage:
+#   ansible-playbook rename_server_by_ip.yml \
+#     -e "target_ip=10.10.10.50 new_name=web-prod-01"
+#
+# Required variables (pass via -e or inventory/group_vars):
+#   target_ip   — current IP address of the VM
+#   new_name    — desired new name
+#
+# Connection variables (can also be set as environment variables):
+#   scp_host, scp_ak, scp_sk, scp_region
+
+- name: Rename SCP VM by IP address
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    # Override these on the command line with -e
+    target_ip: ""
+    new_name: ""
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - target_ip | length > 0
+          - new_name | length > 0
+        fail_msg: "Both 'target_ip' and 'new_name' must be provided (-e target_ip=... new_name=...)"
+
+    - name: Fetch all VMs from SCP
+      erelbi.sangfor_scp.scp_server_info:
+        scp_host: "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region: "{{ scp_region }}"
+      register: all_vms
+
+    # IP bilgisi VM'in networks listesi içinde herhangi bir anahtarda
+    # bulunabileceğinden (ip, fixed_ip, address, …), JSON string araması
+    # yaparak VM'i buluyoruz.
+    - name: Find VM whose networks contain target_ip
+      ansible.builtin.set_fact:
+        target_vm: "{{ item }}"
+      loop: "{{ all_vms.servers }}"
+      when: target_ip in (item.networks | default([]) | to_json)
+      no_log: true   # çok fazla çıktı üretmemesi için
+
+    - name: Fail if no VM found with the given IP
+      ansible.builtin.fail:
+        msg: "No VM found with IP address: {{ target_ip }}"
+      when: target_vm is not defined
+
+    - name: Show found VM
+      ansible.builtin.debug:
+        msg: "Found VM — id={{ target_vm.id }}  current_name={{ target_vm.name }}  status={{ target_vm.status }}"
+
+    - name: Rename VM (skip if name is already correct)
+      erelbi.sangfor_scp.scp_server:
+        scp_host: "{{ scp_host }}"
+        scp_access_key: "{{ scp_ak }}"
+        scp_secret_key: "{{ scp_sk }}"
+        scp_region: "{{ scp_region }}"
+        state: present
+        server_id: "{{ target_vm.id }}"
+        name: "{{ new_name }}"
+        wait: true
+        wait_timeout: 120
+      register: rename_result
+      when: target_vm.name != new_name
+
+    - name: Already named correctly (no change)
+      ansible.builtin.debug:
+        msg: "VM {{ target_vm.id }} is already named '{{ new_name }}' — nothing to do."
+      when: target_vm.name == new_name
+
+    - name: Rename result
+      ansible.builtin.debug:
+        msg: "Renamed '{{ target_vm.name }}' → '{{ new_name }}' successfully."
+      when:
+        - target_vm.name != new_name
+        - rename_result.changed

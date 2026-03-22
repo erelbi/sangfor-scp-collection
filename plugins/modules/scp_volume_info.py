@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
 DOCUMENTATION = r'''
 ---
 module: scp_volume_info
@@ -82,8 +84,6 @@ volumes:
   returned: always
 '''
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.erelbi.sangfor_scp.plugins.module_utils.scp_client import (
