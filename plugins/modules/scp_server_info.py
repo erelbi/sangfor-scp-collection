@@ -31,6 +31,11 @@ options:
   tenant_id:
     description: Filter by tenant ID.
     type: str
+  ip:
+    description: >
+      Filter by IP address. Searches all network fields of each VM for the
+      given address. Returns the first VM whose network data contains the IP.
+    type: str
   scp_host:
     description: SCP platform URL.
     type: str
@@ -86,6 +91,14 @@ EXAMPLES = r'''
     scp_secret_key: "{{ scp_sk }}"
     name: web-01
   register: vm_info
+
+- name: Find VM by IP address
+  erelbi.sangfor_scp.scp_server_info:
+    scp_host: "{{ scp_host }}"
+    scp_access_key: "{{ scp_ak }}"
+    scp_secret_key: "{{ scp_sk }}"
+    ip: "10.10.10.50"
+  register: vm_by_ip
 '''
 
 RETURN = r'''
@@ -111,6 +124,7 @@ def run_module():
         az_id=dict(type='str'),
         status=dict(type='str'),
         tenant_id=dict(type='str'),
+        ip=dict(type='str'),
     )
 
     module = AnsibleModule(argument_spec=argspec, supports_check_mode=True)
@@ -134,6 +148,14 @@ def run_module():
 
         if p.get('name'):
             servers = [s for s in servers if s.get('name') == p['name']]
+
+        if p.get('ip'):
+            target_ip = p['ip']
+            import json
+            servers = [
+                s for s in servers
+                if target_ip in json.dumps(s.get('networks', []))
+            ]
 
         module.exit_json(changed=False, servers=servers)
 

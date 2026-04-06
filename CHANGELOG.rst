@@ -4,6 +4,21 @@ erelbi.sangfor_scp Release Notes
 
 .. contents:: Topics
 
+v1.0.3
+======
+
+New Modules
+-----------
+
+- ``scp_snapshot`` — Create and delete VM snapshots (idempotent, async-aware).
+- ``scp_snapshot_info`` — Query snapshots for a VM; filter by ID or name.
+
+Minor Changes
+-------------
+
+- ``scp_server_info`` — Added ``ip`` parameter to find a VM by its IP address
+  without needing a separate playbook task.
+
 v1.0.2
 ======
 
