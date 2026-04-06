@@ -5,7 +5,7 @@
 Ansible Collection for managing **Sangfor Cloud Platform (SCP)** resources.
 
 Wraps the [`sangfor-scp`](https://pypi.org/project/sangfor-scp/) Python library to provide
-idempotent modules for virtual machines, volumes, networks, EIPs, and platform information.
+idempotent modules for virtual machines, volumes, networks, EIPs, snapshots, and platform information.
 
 ---
 
@@ -76,8 +76,10 @@ export SCP_REGION=cn-south-1
 | Module | Description |
 |---|---|
 | `scp_server` | Manage VMs: create, update, rename, delete, power ops |
-| `scp_server_info` | Query virtual machines |
+| `scp_server_info` | Query VMs; filter by name, status, AZ, tenant, or **IP address** |
 | `scp_server_action` | Batch power operations on multiple VMs |
+| `scp_snapshot` | **Create and delete VM snapshots** (idempotent, async-aware) |
+| `scp_snapshot_info` | **Query snapshots** for a VM; filter by ID or name |
 | `scp_volume` | Manage volumes: create, delete, resize, attach, detach |
 | `scp_volume_info` | Query volumes |
 | `scp_vpc` | Manage VPC networks |
@@ -211,6 +213,81 @@ export SCP_REGION=cn-south-1
     server_id: "{{ vm_id }}"
 ```
 
+### Find VM by IP Address
+
+```yaml
+- name: Find VM by IP
+  erelbi.sangfor_scp.scp_server_info:
+    scp_host: "{{ scp_host }}"
+    scp_access_key: "{{ scp_ak }}"
+    scp_secret_key: "{{ scp_sk }}"
+    ip: "10.10.10.50"
+  register: vm_by_ip
+
+- debug:
+    msg: "VM: {{ vm_by_ip.servers[0].name }} ({{ vm_by_ip.servers[0].id }})"
+  when: vm_by_ip.servers | length > 0
+```
+
+### Create a Snapshot
+
+```yaml
+- name: Create snapshot before upgrade
+  erelbi.sangfor_scp.scp_snapshot:
+    scp_host: "{{ scp_host }}"
+    scp_access_key: "{{ scp_ak }}"
+    scp_secret_key: "{{ scp_sk }}"
+    state: present
+    server_id: "{{ vm_id }}"
+    name: "snap-before-upgrade"
+    description: "Pre-upgrade snapshot"
+    wait: true
+  register: snap_result
+
+- debug:
+    msg: "Snapshot ID: {{ snap_result.snapshot.id }}"
+```
+
+### List Snapshots for a VM
+
+```yaml
+- name: List all snapshots
+  erelbi.sangfor_scp.scp_snapshot_info:
+    scp_host: "{{ scp_host }}"
+    scp_access_key: "{{ scp_ak }}"
+    scp_secret_key: "{{ scp_sk }}"
+    server_id: "{{ vm_id }}"
+  register: snap_list
+
+- debug:
+    msg: "{{ item.name }} — {{ item.id }}"
+  loop: "{{ snap_list.snapshots }}"
+```
+
+### Delete a Snapshot
+
+```yaml
+# Delete by snapshot ID
+- name: Delete snapshot by ID
+  erelbi.sangfor_scp.scp_snapshot:
+    scp_host: "{{ scp_host }}"
+    scp_access_key: "{{ scp_ak }}"
+    scp_secret_key: "{{ scp_sk }}"
+    state: absent
+    server_id: "{{ vm_id }}"
+    snapshot_id: "{{ snap_result.snapshot.id }}"
+
+# Delete by snapshot name
+- name: Delete snapshot by name
+  erelbi.sangfor_scp.scp_snapshot:
+    scp_host: "{{ scp_host }}"
+    scp_access_key: "{{ scp_ak }}"
+    scp_secret_key: "{{ scp_sk }}"
+    state: absent
+    server_id: "{{ vm_id }}"
+    name: "snap-before-upgrade"
+```
+
 ### Batch Power Operations
 
 ```yaml
@@ -299,7 +376,7 @@ ansible-vault encrypt group_vars/all/scp_auth.yml
 |---|---|
 | 6.3.0+ | Full VM, Volume, Network, EIP APIs |
 | 6.8.0+ | EIP APIs |
-| 6.11.1+ | Latest API (tested) |
+| 6.11.1+ | Snapshot APIs, latest API (tested) |
 
 ---
 
